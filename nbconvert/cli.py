@@ -31,13 +31,18 @@ def print_nbconvert_version(ctx, param, value):
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.pass_context
 @click.argument('notebook_path', required=not INPUT_PIPED)
-@click.argument('output_path', default="")
+@click.option(
+    '--output-path',
+    default="temp.ipynb",
+    help="Output file destination",
+)
 @click.option(
     '--help-notebook',
     is_flag=True,
     default=False,
     help='Display parameters information for the given notebook path.',
 )
+@click.option("--parameter_specified", '-P', multiple=True, help='Parameters to look for in the notebook.')
 @click.option('--parameters', '-p', nargs=2, multiple=True, help='Parameters to pass to the parameters cell.')
 @click.option('--parameters_raw', '-r', nargs=2, multiple=True, help='Parameters to be read as raw string.')
 @click.option('--parameters_file', '-f', multiple=True, help='Path to YAML file containing parameters.')
@@ -140,6 +145,7 @@ def nbconvert(
     notebook_path,
     output_path,
     help_notebook,
+    parameter_specified,
     parameters,
     parameters_raw,
     parameters_file,
@@ -233,6 +239,7 @@ def nbconvert(
         execute_notebook(
             input_path=input_path,
             output_path=output_path,
+            parameters_specified=parameter_specified,
             parameters=parameters_final,
             engine_name=engine,
             request_save_on_cell_execute=request_save_on_cell_execute,

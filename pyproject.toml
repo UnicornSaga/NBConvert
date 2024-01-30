@@ -59,3 +59,7 @@ ignore-init-module-imports = true
 [tool.ruff.pydocstyle]
 # Use Google-style docstrings.
 convention = "google"
+
+[tool.isort]
+profile = "black"
+src_paths = ["isort", "test"]

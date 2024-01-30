@@ -1,8 +1,9 @@
 from pathlib import Path
 
+from autoimport import fix_code
+import isort
 import nbformat
 
-from nbconvert.const import PREPROCESS_TAG, TRAIN_TAG, INFERENCE_TAG
 from nbconvert.engines import nbconvert_engines
 from nbconvert.exceptions import NBConvertExecutionError
 from nbconvert.inspection import _infer_parameters
@@ -14,6 +15,7 @@ from nbconvert.utils import chdir
 def execute_notebook(
     input_path,
     output_path,
+    parameters_specified=None,
     parameters=None,
     engine_name=None,
     request_save_on_cell_execute=True,
@@ -37,6 +39,8 @@ def execute_notebook(
         Path to input notebook or NotebookNode object of notebook
     output_path : str or Path or None
         Path to save executed notebook. If None, no file will be saved
+    parameters_specified: tuple, optional
+        The specified parameters for locating cells that needs to be converted
     parameters : dict, optional
         Arbitrary keyword arguments to pass to the notebook parameters
     engine_name : str, optional
@@ -90,7 +94,6 @@ def execute_notebook(
 
         # Parameterize the Notebook.
         if parameters:
-            # TODO: Investigate and get the code from parameterized cell, put it into a class
             parameter_predefined = _infer_parameters(nb, name=kernel_name, language=language)
             parameter_predefined = {p.name for p in parameter_predefined}
             for p in parameters:
@@ -106,7 +109,6 @@ def execute_notebook(
             )
 
         nb = prepare_notebook_metadata(nb, input_path, output_path, report_mode)
-        # clear out any existing error markers from previous nbconvert runs
         nb = remove_error_markers(nb)
 
 
@@ -136,27 +138,25 @@ def execute_notebook(
         # write_ipynb(nb, output_path)
 
         # Write tagged cell into separated python files
-        preprocess_cell_buffer, train_cell_buffer, inference_cell_buffer = prepare_notebook_cell(nb)
-        write_py(preprocess_cell_buffer, "preprocess.py")
-        write_py(train_cell_buffer, "train.py")
-        write_py(inference_cell_buffer, "inference.py")
+        cell_buffers = prepare_notebook_cell(nb, parameters_specified)
+        for cell in cell_buffers:
+            cell_tag, cell_content = list(cell.keys())[0], list(cell.values())[0]
+            fix_import_buffer = fix_code(cell_content)
+            sorted_import_buffer = isort.code(fix_import_buffer)
+            write_py(sorted_import_buffer, f"{cell_tag}.py")
 
         return nb
 
-def prepare_notebook_cell(nb):
-    PREPROCESS = []
-    TRAIN = []
-    INFERENCE = []
+def prepare_notebook_cell(nb, parameters):
+    BUFFER = []
     for cell in nb.cells:
         if cell.cell_type == 'code':
-            if PREPROCESS_TAG in cell.metadata.tags:
-                PREPROCESS.append(cell.source)
-            elif TRAIN_TAG in cell.metadata.tags:
-                TRAIN.append(cell.source)
-            elif INFERENCE_TAG in cell.metadata.tags:
-                INFERENCE.append(cell.source)
+            for tag in cell.metadata.tags:
+                if tag in parameters:
+                    BUFFER.append({tag: cell.source})
 
-    return ''.join(PREPROCESS), ''.join(TRAIN), ''.join(INFERENCE)
+    print(BUFFER)
+    return BUFFER
 
 
 def prepare_notebook_metadata(nb, input_path, output_path, report_mode=False):
