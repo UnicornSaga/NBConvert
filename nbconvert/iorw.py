@@ -189,7 +189,7 @@ class LocalHandler:
         with chdir(self._cwd):
             dirname = os.path.dirname(path)
             if dirname and not os.path.exists(dirname):
-                raise FileNotFoundError(f"output folder {dirname} doesn't exist.")
+                os.mkdir(dirname)
             with open(path, 'w', encoding="utf-8") as f:
                 f.write(buf)
 

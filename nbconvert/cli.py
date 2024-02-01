@@ -31,6 +31,7 @@ def print_nbconvert_version(ctx, param, value):
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.pass_context
 @click.argument('notebook_path', required=not INPUT_PIPED)
+@click.argument('output_path', default="")
 @click.option(
     '--output-path',
     default="temp.ipynb",
@@ -71,20 +72,10 @@ def print_nbconvert_version(ctx, param, value):
 )
 @click.option('--engine', help='The execution engine name to use in evaluating the notebook.')
 @click.option(
-    '--request-save-on-cell-execute/--no-request-save-on-cell-execute',
-    default=True,
-    help='Request save notebook after each cell execution',
-)
-@click.option(
     '--autosave-cell-every',
     default=30,
     type=int,
     help='How often in seconds to autosave the notebook during long cell executions (0 to disable)',
-)
-@click.option(
-    '--prepare-only/--prepare-execute',
-    default=False,
-    help="Flag for outputting the notebook without execution, but with parameters applied.",
 )
 @click.option(
     '--kernel',
@@ -97,34 +88,11 @@ def print_nbconvert_version(ctx, param, value):
     help='Language for notebook execution. Ignores language in the notebook document metadata.',
 )
 @click.option('--cwd', default=None, help='Working directory to run notebook in.')
-@click.option('--progress-bar/--no-progress-bar', default=None, help="Flag for turning on the progress bar.")
-@click.option(
-    '--log-output/--no-log-output',
-    default=False,
-    help="Flag for writing notebook output to the configured logger.",
-)
-@click.option(
-    '--stdout-file',
-    type=click.File(mode='w', encoding='utf-8'),
-    help="File to write notebook stdout output to.",
-)
-@click.option(
-    '--stderr-file',
-    type=click.File(mode='w', encoding='utf-8'),
-    help="File to write notebook stderr output to.",
-)
 @click.option(
     '--log-level',
     type=click.Choice(['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']),
     default='INFO',
     help='Set log level',
-)
-@click.option(
-    '--start-timeout',
-    '--start_timeout',  # Backwards compatible naming
-    type=int,
-    default=60,
-    help="Time in seconds to wait for kernel to start.",
 )
 @click.option(
     '--execution-timeout',
@@ -155,20 +123,11 @@ def nbconvert(
     inject_output_path,
     inject_paths,
     engine,
-    request_save_on_cell_execute,
-    autosave_cell_every,
-    prepare_only,
     kernel,
     language,
     cwd,
-    progress_bar,
-    log_output,
     log_level,
-    start_timeout,
-    execution_timeout,
     report_mode,
-    stdout_file,
-    stderr_file,
 ):
     """This utility executes a single notebook in a subprocess.
 
@@ -210,9 +169,6 @@ def nbconvert(
         if log_level == 'INFO':
             log_level = 'ERROR'
 
-    elif progress_bar is None:
-        progress_bar = not log_output
-
     logger.setLevel(level=log_level)
 
     # Read in Parameters
@@ -242,19 +198,10 @@ def nbconvert(
             parameters_specified=parameter_specified,
             parameters=parameters_final,
             engine_name=engine,
-            request_save_on_cell_execute=request_save_on_cell_execute,
-            autosave_cell_every=autosave_cell_every,
-            prepare_only=prepare_only,
             kernel_name=kernel,
             language=language,
-            progress_bar=progress_bar,
-            log_output=log_output,
-            stdout_file=stdout_file,
-            stderr_file=stderr_file,
-            start_timeout=start_timeout,
             report_mode=report_mode,
             cwd=cwd,
-            execution_timeout=execution_timeout,
         )
     except nbclient.exceptions.DeadKernelError:
         # Exiting with a special exit code for dead kernels
