@@ -1,12 +1,14 @@
+import logging
 import os
 import threading
 import zlib
 
 from boto3.session import Session
 
-from nbconvert.exceptions import AwsError
-from nbconvert.utils import retry
-from nbconvert.log import logger
+from .exceptions import AwsError
+from .utils import retry
+
+logger = logging.getLogger('papermill.s3')
 
 
 class Bucket:
@@ -79,6 +81,9 @@ class Key:
         name of a service resource, such as SQS, EC2, etc.
 
     """
+
+    # TODO make size, etag, etc properties that can be called from the
+    # object as needed
     def __init__(
         self,
         bucket,
@@ -148,8 +153,12 @@ class S3:
                     session_params['aws_access_key_id'] = aws_access_key
                     session_params['aws_secret_access_key'] = aws_secret_key
 
-                s3 = session.resource('s3', **session_params)
-                S3.s3_session = (session, client, s3)
+                try:
+                    s3 = session.resource('s3', **session_params)
+                    S3.s3_session = (session, client, s3)
+                except:
+                    logger.error("Invalid/Missing AWS credentials or BOTO3_ENDPOINT_URL")
+                    raise
 
         (self.session, self.client, self.s3) = S3.s3_session
 
@@ -158,18 +167,12 @@ class S3:
 
     def _clean(self, name):
         name = self._clean_s3(name)
-        name = self._clean_minio(name)
         if self._is_s3(name):
             return name[5:]
-        elif self._is_minio(name):
-            return name[8:]
         return name
 
     def _clean_s3(self, name):
         return f"s3:{name[4:]}" if name.startswith('s3n:') else name
-
-    def _clean_minio(self, name):
-        return f"http:{name[6:]}" if name.startswith('minio:') else name
 
     def _get_key(self, name):
         if isinstance(name, Key):
@@ -261,13 +264,6 @@ class S3:
         name = self._clean_s3(name)
         return 's3://' in name
 
-    def _is_minio(self, name):
-        if not isinstance(name, (str, Key, Prefix)):
-            return False
-
-        name = self._clean_minio(name)
-        return 'minio://' in name
-
     def cat(
         self,
         source,
@@ -284,7 +280,7 @@ class S3:
         skip encoding.
 
         """
-        assert self._is_s3(source) or self._is_minio(source) or isinstance(source, Key), 'source must be a valid S3 or MinIO path'
+        assert self._is_s3(source) or isinstance(source, Key), 'source must be a valid s3 path'
 
         key = self._get_key(source) if not isinstance(source, Key) else source
         compressed = (compressed or key.name.endswith('.gz')) and not raw
@@ -379,7 +375,7 @@ class S3:
         """
 
         assert isinstance(source, str), "source must be a string"
-        assert self._is_s3(dest) or self._is_minio(dest), "Destination must be S3 or MinIO location"
+        assert self._is_s3(dest), "Destination must be s3 location"
 
         return self._put_string(source, dest, **kwargs)
 
@@ -402,7 +398,7 @@ class S3:
            if True return iterator rather than converting to list object
 
         """
-        assert self._is_s3(name) or self._is_minio(name), "name must be in form s3://bucket/key or minio://bucket/key"
+        assert self._is_s3(name), "name must be in form s3://bucket/key"
 
         it = self._list(bucket=self._bucket_name(name), prefix=self._key_name(name), **kwargs)
         return iter(it) if iterator else list(it)
@@ -426,7 +422,7 @@ class S3:
             files or prefixes that are encountered
 
         """
-        assert self._is_s3(name) or self._is_minio(name), "name must be in form s3://bucket/key or minio://bucket/key"
+        assert self._is_s3(name), "name must be in form s3://bucket/prefix/"
 
         if not name.endswith('/'):
             name += "/"

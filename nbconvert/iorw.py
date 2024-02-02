@@ -355,6 +355,7 @@ class NoDatesSafeLoader(yaml.SafeLoader):
 nbconvert_io = NBConvertIO()
 nbconvert_io.register("local", LocalHandler())
 nbconvert_io.register("s3://", S3Handler)
+nbconvert_io.register("minio://", S3Handler)
 nbconvert_io.register("gs://", GCSHandler())
 nbconvert_io.register("abs://", ABSHandler())
 nbconvert_io.register("http://", HttpHandler)

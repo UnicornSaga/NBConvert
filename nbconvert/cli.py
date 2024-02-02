@@ -34,7 +34,7 @@ def print_nbconvert_version(ctx, param, value):
 @click.argument('output_path', default="")
 @click.option(
     '--output-path',
-    default="temp.ipynb",
+    default="./artifacts",
     help="Output file destination",
 )
 @click.option(
@@ -72,12 +72,6 @@ def print_nbconvert_version(ctx, param, value):
 )
 @click.option('--engine', help='The execution engine name to use in evaluating the notebook.')
 @click.option(
-    '--autosave-cell-every',
-    default=30,
-    type=int,
-    help='How often in seconds to autosave the notebook during long cell executions (0 to disable)',
-)
-@click.option(
     '--kernel',
     '-k',
     help='Name of kernel to run. Ignores kernel name in the notebook document metadata.',
@@ -93,11 +87,6 @@ def print_nbconvert_version(ctx, param, value):
     type=click.Choice(['NOTSET', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']),
     default='INFO',
     help='Set log level',
-)
-@click.option(
-    '--execution-timeout',
-    type=int,
-    help="Time in seconds to wait for each cell before failing execution (default: forever)",
 )
 @click.option('--report-mode/--no-report-mode', default=False, help="Flag for hiding input.")
 @click.option(

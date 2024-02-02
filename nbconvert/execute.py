@@ -97,6 +97,8 @@ def execute_notebook(
             sorted_import_buffer = isort.code(fix_import_buffer)
             write_py(sorted_import_buffer, f"{output_path}/{version_uuid}/{cell_tag}.py")
 
+        logger.info(f"Generated Python artifacts with UUID directory {version_uuid}")
+
         return version_uuid
 
 def prepare_notebook_cell(nb, parameters):
