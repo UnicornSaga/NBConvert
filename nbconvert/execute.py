@@ -1,7 +1,10 @@
+from collections import defaultdict
 from pathlib import Path
 import uuid
+import re
 
 from autoimport import fix_code
+import black
 import isort
 import nbformat
 
@@ -10,6 +13,7 @@ from nbconvert.inspection import _infer_parameters
 from nbconvert.iorw import get_pretty_path, load_notebook_node, local_file_io_cwd, write_ipynb, write_py
 from nbconvert.log import logger
 from nbconvert.parameterize import add_builtin_parameters, parameterize_notebook, parameterize_path
+
 
 def execute_notebook(
     input_path,
@@ -91,23 +95,46 @@ def execute_notebook(
         # Write tagged cell into separated python files
         version_uuid = uuid.uuid4()
         cell_buffers = prepare_notebook_cell(nb, parameters_specified)
-        for cell in cell_buffers:
-            cell_tag, cell_content = list(cell.keys())[0], list(cell.values())[0]
+        print(cell_buffers)
+        for cell_tag, cell_content in cell_buffers.items():
             fix_import_buffer = fix_code(cell_content)
             sorted_import_buffer = isort.code(fix_import_buffer)
-            write_py(sorted_import_buffer, f"{output_path}/{version_uuid}/{cell_tag}.py")
+            cell_content = black.format_str(
+                sorted_import_buffer,
+                mode=black.Mode(
+                    target_versions={black.TargetVersion.PY38},
+                    string_normalization=True,
+                    is_pyi=False,
+                ),
+            )
+            write_py(cell_content, f"{output_path}/{version_uuid}/{cell_tag}.py")
 
         logger.info(f"Generated Python artifacts with UUID directory {version_uuid}")
 
         return version_uuid
 
+
+def _prepare_code_buffer(code_buffer):
+    pattern = re.compile(r'\bdef\b\s+\w+\s*\(\[^\)]*\):\s*\(\[^]*?\)\(?=\s*\bdef\b|\s*$\)', re.DOTALL)
+    match = pattern.search(code_buffer)
+
+    if match:
+        return match.group(1).strip()
+    else:
+        return code_buffer
+
+
 def prepare_notebook_cell(nb, parameters):
-    BUFFER = []
+    BUFFER = {}
     for cell in nb.cells:
         if cell.cell_type == 'code':
             for tag in cell.metadata.tags:
                 if tag in parameters:
-                    BUFFER.append({tag: cell.source})
+                    if tag not in BUFFER:
+                        BUFFER[tag] = f"def {tag}():"
+                    cell_source = '\n' + cell.source
+                    cell_source = cell_source.replace('\n', '\n\t')
+                    BUFFER[tag] += cell_source + '\n'
 
     return BUFFER
 
