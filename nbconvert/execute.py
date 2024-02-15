@@ -1,4 +1,5 @@
-from collections import defaultdict
+import ast
+import os
 from pathlib import Path
 import uuid
 import re
@@ -9,6 +10,7 @@ import isort
 import nbformat
 
 from nbconvert.exceptions import NBConvertExecutionError
+from nbconvert.format import handle_missing_variables, find_files_containing_imports
 from nbconvert.inspection import _infer_parameters
 from nbconvert.iorw import get_pretty_path, load_notebook_node, local_file_io_cwd, write_ipynb, write_py
 from nbconvert.log import logger
@@ -95,12 +97,12 @@ def execute_notebook(
         # Write tagged cell into separated python files
         version_uuid = uuid.uuid4()
         cell_buffers = prepare_notebook_cell(nb, parameters_specified)
-        print(cell_buffers)
         for cell_tag, cell_content in cell_buffers.items():
             fix_import_buffer = fix_code(cell_content)
             sorted_import_buffer = isort.code(fix_import_buffer)
+            cell_content = handle_missing_variables(cell_tag, sorted_import_buffer)
             cell_content = black.format_str(
-                sorted_import_buffer,
+                cell_content,
                 mode=black.Mode(
                     target_versions={black.TargetVersion.PY38},
                     string_normalization=True,
@@ -108,6 +110,16 @@ def execute_notebook(
                 ),
             )
             write_py(cell_content, f"{output_path}/{version_uuid}/{cell_tag}.py")
+
+            current_root_dir = os.environ.get('ROOT_PROJECT_DIR', None)
+            if not current_root_dir:
+                logger.info("Missing env ROOT_PROJECT_DIR")
+            missing_import_files = find_files_containing_imports(cell_content, current_root_dir)
+            for file_path in missing_import_files:
+                file_name = str(file_path).split('/')[-1]
+                with open(file_path, 'r') as f:
+                    file_content = f.read()
+                    write_py(file_content, f"{output_path}/{version_uuid}/{file_name}")
 
         logger.info(f"Generated Python artifacts with UUID directory {version_uuid}")
 
