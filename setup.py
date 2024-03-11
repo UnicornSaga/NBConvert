@@ -41,11 +41,12 @@ def read_requirements(fname, folder=None):
 s3_reqs = read_requirements('s3.txt', folder='dev_requirements')
 azure_reqs = read_requirements('azure.txt', folder='dev_requirements')
 gcs_reqs = read_requirements('gcs.txt', folder='dev_requirements')
+github_reqs = read_requirements('github.txt', folder='dev_requirements')
 docs_only_reqs = read_requirements('docs.txt', folder='dev_requirements')
 black_reqs = ['black >= 19.3b0']
 all_reqs = s3_reqs + azure_reqs + gcs_reqs + black_reqs
 docs_reqs = all_reqs + docs_only_reqs
-dev_reqs = read_requirements('dev.txt', folder='dev_requirements') + s3_reqs + azure_reqs + gcs_reqs + black_reqs  # all_reqs
+dev_reqs = read_requirements('dev.txt', folder='dev_requirements') + s3_reqs + azure_reqs + gcs_reqs + github_reqs + black_reqs  # all_reqs
 extras_require = {
     "test": dev_reqs,
     "dev": dev_reqs,
