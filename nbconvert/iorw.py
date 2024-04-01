@@ -39,7 +39,7 @@ except ImportError:
 try:
     from github import Github
 except ImportError:
-    Github = missing_dependency_generator("pygithub", "github")
+    Github = missing_dependency_generator("pygithub")
 
 
 def fallback_gs_is_retriable(e):

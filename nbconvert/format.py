@@ -1,59 +1,157 @@
 import ast
 import os
+from collections import deque
 
-from nbconvert.log import logger
+from nbconvert.utils import find_file
 
 
-def handle_missing_variables(cell_tag, code_buffer):
+class StaticAnalyzer(ast.NodeVisitor):
+    def __init__(self):
+        self.class_def = set()
+        self.function_def = set()
+        self.function_param_def = set()
+        self.import_def = set()
+        self.alias_def = set()
+        self.assign_def = set()
+        self.func_call = set()
+
+    def visit_ClassDef(self, node: ast.ClassDef):
+        if isinstance(node, ast.ClassDef):
+            self.class_def.add(node.name)
+            for func in node.body:
+                if isinstance(func, ast.FunctionDef) or isinstance(func, ast.AsyncFunctionDef):
+                    self.function_def.add(node.name)
+                    for arg in node.args.args:
+                        self.function_param_def.add(arg.arg)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        if isinstance(node, ast.FunctionDef):
+            self.function_def.add(node.name)
+            for arg in node.args.args:
+                self.function_param_def.add(arg.arg)
+        self.generic_visit(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        if isinstance(node, ast.FunctionDef):
+            self.function_def.add(node.name)
+            for arg in node.args.args:
+                self.function_param_def.add(arg.arg)
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign):
+        if isinstance(node, ast.Assign):
+            for i, target in enumerate(node.targets):
+                target_dict = target.__dict__
+                if "elts" in target_dict:
+                    for e in target_dict.get("elts"):
+                        self.assign_def.add(e.id)
+                try:
+                    self.assign_def.add(node.value.elt.id)
+                except:
+                    pass
+                self.assign_def.add(target_dict.get("id"))
+        self.generic_visit(node)
+
+    def visit_Import(self, node):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                self.import_def.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                self.alias_def.add(alias.name)
+            module = node.module
+            if module:
+                self.import_def.add(module)
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom):
+        if isinstance(node, ast.ImportFrom):
+            for name in node.names:
+                self.import_def.add(node.module)
+                self.import_def.add(name.name)
+                self.alias_def.add(name.asname)
+        self.generic_visit(node)
+
+    def visit_With(self, node: ast.With):
+        if isinstance(node, ast.With):
+            for item in node.items:
+                try:
+                    self.assign_def.add(item.optional_vars.id)
+                except:
+                    pass
+            self.generic_visit(node)
+
+    def visit_For(self, node: ast.For):
+        if isinstance(node, ast.For):
+            try:
+                if isinstance(node.target, ast.Name):
+                    self.assign_def.add(node.target.id)
+                elif isinstance(node.target, ast.Tuple):
+                    # BFS (Might have Tuple inside tuple)
+                    queue = deque()
+                    for target in node.target.elts:
+                        queue.append(target)
+                    while len(queue) > 0:
+                        target = queue.popleft()
+                        if isinstance(target, ast.Name):
+                            self.assign_def.add(target.id)
+                        elif isinstance(target, ast.Tuple):
+                            for t in target.elts:
+                                queue.append(t)
+            except:
+                pass
+        self.generic_visit(node)
+
+    def visit_alias(self, node: ast.alias):
+        if isinstance(node, ast.alias):
+            self.alias_def.add(node.asname)
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call):
+        if isinstance(node, ast.Call):
+            try:
+                func_name = node.func.id
+                self.func_call.add(func_name)
+            except:
+                pass
+        self.generic_visit(node)
+
+
+def handle_missing_variables(code_buffer, cell_tag = None):
     undefined_variables = set()
-    function_parameters = set()
-    user_defined_function = set()
-    imports = set()
+    unimport_function = set()
 
-    def _visit_node_for_undefined_variables(node):
+    def _visit_node_for_undefined_variables(node, analyzer):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             variable_name = node.id
 
             # Check if the variable is not defined locally and is not a function parameter
-            if variable_name not in function_parameters and \
-                    variable_name not in __builtins__ and \
-                    variable_name not in user_defined_function and \
-                    variable_name not in imports:
-                logger.info(f"Undefined variable of parameter {cell_tag}: {variable_name}")
+            if variable_name not in analyzer.class_def and \
+                    variable_name not in analyzer.function_def and \
+                    variable_name not in analyzer.function_param_def and \
+                    variable_name not in analyzer.import_def and \
+                    variable_name not in analyzer.alias_def and \
+                    variable_name not in analyzer.assign_def and \
+                    variable_name not in __builtins__:
                 undefined_variables.add(variable_name)
-
-
-    def _visit_node_for_function_parameters(node):
-        if isinstance(node, ast.FunctionDef):
-            user_defined_function.add(node.name)
-            for arg in node.args.args:
-                function_parameters.add(arg.arg)
-
-
-    def _visit_node_for_imports(node):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                imports.add(alias.name)
-        elif isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                imports.add(alias.name)
-            module = node.module
-            if module:
-                imports.add(module)
-
 
     try:
         buffer_tree = ast.parse(code_buffer)
+        analyzer = StaticAnalyzer()
+        analyzer.visit(buffer_tree)
 
-        # First, visit the tree to collect function parameters
-        for node in ast.walk(buffer_tree):
-            _visit_node_for_function_parameters(node)
-
-        for node in ast.walk(buffer_tree):
-            _visit_node_for_imports(node)
         # Then, visit the tree again to collect undefined variables
         for node in ast.walk(buffer_tree):
-            _visit_node_for_undefined_variables(node)
+            _visit_node_for_undefined_variables(node, analyzer)
+
+        # Visit for unimport function
+        for func_call in analyzer.func_call:
+            if func_call not in analyzer.function_def and \
+                    func_call not in analyzer.import_def and \
+                    func_call not in analyzer.alias_def and \
+                    func_call not in __builtins__:
+                unimport_function.add(func_call)
 
         if len(undefined_variables) != 0:
             new_code_buffer = "\n".join(f"{var} = None" for var in undefined_variables) + "\n\n" + code_buffer
@@ -62,6 +160,7 @@ def handle_missing_variables(cell_tag, code_buffer):
             return code_buffer
     except SyntaxError as e:
         raise SyntaxError(f"Syntax error in code: {e}")
+
 
 def _extract_imports(code):
     imports = []
@@ -123,8 +222,11 @@ def find_files_containing_imports(code, project_directory):
             for missing_import in missing_imports:
                 if isinstance(missing_import, dict):
                     sub_module = list(missing_import.keys())[0]
+                    import_module = '/'.join(sub_module.split(".")) + '.py'
+                    if import_module in str(curr_file):
+                        print(import_module, str(curr_file))
                     for func in missing_import[sub_module]:
-                        if sub_module in curr_file and func in file_content:
+                        if import_module in curr_file and func in file_content:
                             matching_files.add(curr_file)
                 else:
                     if missing_import in curr_file:
@@ -139,5 +241,3 @@ def find_files_containing_imports(code, project_directory):
             search_files(code, file_path)
 
     return matching_files
-
-

@@ -1,4 +1,3 @@
-import ast
 import os
 from pathlib import Path
 import uuid
@@ -8,6 +7,7 @@ from autoimport import fix_code
 import black
 import isort
 import nbformat
+from maison.config import ProjectConfig
 
 from nbconvert.exceptions import NBConvertExecutionError
 from nbconvert.format import handle_missing_variables, find_files_containing_imports
@@ -15,6 +15,7 @@ from nbconvert.inspection import _infer_parameters
 from nbconvert.iorw import get_pretty_path, load_notebook_node, local_file_io_cwd, write_ipynb, write_py
 from nbconvert.log import logger
 from nbconvert.parameterize import add_builtin_parameters, parameterize_notebook, parameterize_path
+from nbconvert.utils import find_file
 
 
 def execute_notebook(
@@ -94,13 +95,23 @@ def execute_notebook(
         nb = prepare_notebook_metadata(nb, input_path, output_path, report_mode)
         nb = remove_error_markers(nb)
 
+        config_path = find_file("pyproject.toml")
+        config = ProjectConfig(
+            project_name="autoimport",
+            source_files=[config_path],
+            merge_configs=True,
+        ).to_dict()
+
         # Write tagged cell into separated python files
         version_uuid = uuid.uuid4()
         cell_buffers = prepare_notebook_cell(nb, parameters_specified)
         for cell_tag, cell_content in cell_buffers.items():
-            fix_import_buffer = fix_code(cell_content)
+            fix_import_buffer = fix_code(
+                original_source_code=cell_content,
+                config=config,
+            )
             sorted_import_buffer = isort.code(fix_import_buffer)
-            cell_content = handle_missing_variables(cell_tag, sorted_import_buffer)
+            cell_content = handle_missing_variables(sorted_import_buffer, cell_tag)
             cell_content = black.format_str(
                 cell_content,
                 mode=black.Mode(
@@ -111,7 +122,9 @@ def execute_notebook(
             )
             write_py(cell_content, f"{output_path}/{version_uuid}/{cell_tag}.py")
 
-            current_root_dir = os.environ.get('ROOT_PROJECT_DIR', None)
+            # TODO: Handle duplicate function names when handling unimport files.
+
+            current_root_dir = os.environ.get('ROOT_PROJECT_DIR', os.getcwd())
             if not current_root_dir:
                 logger.info("Missing env ROOT_PROJECT_DIR")
             missing_import_files = find_files_containing_imports(cell_content, current_root_dir)
@@ -137,6 +150,13 @@ def _prepare_code_buffer(code_buffer):
 
 
 def prepare_notebook_cell(nb, parameters):
+    if len(parameters) == 0:
+        parameters = set()
+        for cell in nb.cells:
+            if cell.cell_type == 'code':
+                for tag in cell.metadata.tags:
+                    parameters.add(tag)
+
     BUFFER = {}
     for cell in nb.cells:
         if cell.cell_type == 'code':

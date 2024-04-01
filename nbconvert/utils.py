@@ -2,6 +2,7 @@ import os
 import warnings
 from contextlib import contextmanager
 from functools import wraps
+from typing import Union
 
 from nbconvert.exceptions import NBConvertParameterOverwriteWarning
 from nbconvert.log import logger
@@ -187,3 +188,21 @@ def chdir(path):
             yield
         finally:
             os.chdir(old_dir)
+
+
+def find_file(file_name) -> Union[str, None]:
+    curr_dir = os.getcwd()
+    while True:
+        file_list = os.listdir(curr_dir)
+        parent_dir = os.path.dirname(curr_dir)
+        for file in file_list:
+            if file_name == file:
+                return file
+
+        # If file not found
+        if curr_dir == parent_dir:
+            break
+        else:
+            curr_dir = parent_dir
+
+    return None

@@ -56,6 +56,7 @@ extras_require = {
     "gcs": gcs_reqs,
     "black": black_reqs,
     "docs": docs_reqs,
+    "github": github_reqs,
 }
 
 setup(
