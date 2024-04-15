@@ -15,7 +15,7 @@ class StaticAnalyzer(ast.NodeVisitor):
         self.assign_def = set()
         self.func_call = set()
 
-    def visit_ClassDef(self, node: ast.ClassDef):
+    def visit_ClassDef(self, node):
         if isinstance(node, ast.ClassDef):
             self.class_def.add(node.name)
             for func in node.body:
@@ -25,27 +25,27 @@ class StaticAnalyzer(ast.NodeVisitor):
                         self.function_param_def.add(arg.arg)
         self.generic_visit(node)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef):
+    def visit_FunctionDef(self, node):
         if isinstance(node, ast.FunctionDef):
             self.function_def.add(node.name)
             for arg in node.args.args:
                 self.function_param_def.add(arg.arg)
         self.generic_visit(node)
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+    def visit_AsyncFunctionDef(self, node):
         if isinstance(node, ast.FunctionDef):
             self.function_def.add(node.name)
             for arg in node.args.args:
                 self.function_param_def.add(arg.arg)
         self.generic_visit(node)
 
-    def visit_Assign(self, node: ast.Assign):
+    def visit_Assign(self, node):
         if isinstance(node, ast.Assign):
             for i, target in enumerate(node.targets):
                 target_dict = target.__dict__
                 if "elts" in target_dict:
-                    for e in target_dict.get("elts"):
-                        self.assign_def.add(e.id)
+                    for elt in target_dict.get("elts"):
+                        self.assign_def.add(elt.id)
                 try:
                     self.assign_def.add(node.value.elt.id)
                 except:
@@ -65,7 +65,7 @@ class StaticAnalyzer(ast.NodeVisitor):
                 self.import_def.add(module)
         self.generic_visit(node)
 
-    def visit_ImportFrom(self, node: ast.ImportFrom):
+    def visit_ImportFrom(self, node):
         if isinstance(node, ast.ImportFrom):
             for name in node.names:
                 self.import_def.add(node.module)
@@ -73,7 +73,7 @@ class StaticAnalyzer(ast.NodeVisitor):
                 self.alias_def.add(name.asname)
         self.generic_visit(node)
 
-    def visit_With(self, node: ast.With):
+    def visit_With(self, node):
         if isinstance(node, ast.With):
             for item in node.items:
                 try:
@@ -82,7 +82,7 @@ class StaticAnalyzer(ast.NodeVisitor):
                     pass
             self.generic_visit(node)
 
-    def visit_For(self, node: ast.For):
+    def visit_For(self, node):
         if isinstance(node, ast.For):
             try:
                 if isinstance(node.target, ast.Name):
@@ -103,16 +103,18 @@ class StaticAnalyzer(ast.NodeVisitor):
                 pass
         self.generic_visit(node)
 
-    def visit_alias(self, node: ast.alias):
+    def visit_alias(self, node):
         if isinstance(node, ast.alias):
             self.alias_def.add(node.asname)
         self.generic_visit(node)
 
-    def visit_Call(self, node: ast.Call):
+    def visit_Call(self, node):
         if isinstance(node, ast.Call):
             try:
                 func_name = node.func.id
                 self.func_call.add(func_name)
+                for arg in node.args:
+                    self.assign_def.add(arg.id)
             except:
                 pass
         self.generic_visit(node)
@@ -223,8 +225,6 @@ def find_files_containing_imports(code, project_directory):
                 if isinstance(missing_import, dict):
                     sub_module = list(missing_import.keys())[0]
                     import_module = '/'.join(sub_module.split(".")) + '.py'
-                    if import_module in str(curr_file):
-                        print(import_module, str(curr_file))
                     for func in missing_import[sub_module]:
                         if import_module in curr_file and func in file_content:
                             matching_files.add(curr_file)
