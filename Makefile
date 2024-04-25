@@ -1,5 +1,5 @@
 .PHONY: test
-test: test-unit test-integration
+test: test-unit
 
 	@echo "\a"
 
@@ -13,15 +13,6 @@ test-unit:
 
 	@echo ""
 
-.PHONY: test-integration
-test-integration:
-	@echo "-----------------------"
-	@echo "- Integration Testing -"
-	@echo "-----------------------"
-
-	python -m unittest discover -s ./nbconvert/tests/ -p 'test_*.py'
-	@echo ""
-
 .PHONY: coverage
 coverage:
 	@echo "------------"
@@ -29,6 +20,8 @@ coverage:
 	@echo "------------"
 
 	coverage run -m unittest discover -s ./nbconvert/tests/ -p 'test_*.py'
+
+	coverage run -m pytest ./nbconvert/tests/
 
 	@echo ""
 

@@ -301,10 +301,42 @@ class BashTranslator(Translator):
         return f'{name}={str_val}'
 
 
+class RTranslator(Translator):
+    @classmethod
+    def translate_none(cls, val):
+        return 'NULL'
+
+    @classmethod
+    def translate_bool(cls, val):
+        return 'TRUE' if val else 'FALSE'
+
+    @classmethod
+    def translate_dict(cls, val):
+        escaped = ', '.join([f'{cls.translate_str(k)} = {cls.translate(v)}' for k, v in val.items()])
+        return f'list({escaped})'
+
+    @classmethod
+    def translate_list(cls, val):
+        escaped = ', '.join([cls.translate(v) for v in val])
+        return f'list({escaped})'
+
+    @classmethod
+    def comment(cls, cmt_str):
+        return f'# {cmt_str}'.strip()
+
+    @classmethod
+    def assign(cls, name, str_val):
+        # Leading '_' aren't legal R variable names -- so we drop them when injecting
+        while name.startswith("_"):
+            name = name[1:]
+        return f'{name} = {str_val}'
+
+
 nbconvert_translators = NBConvertTranslators()
 nbconvert_translators.register("python", PythonTranslator)
 nbconvert_translators.register("pysparkkernel", PythonTranslator)
 nbconvert_translators.register("bash", BashTranslator)
+nbconvert_translators.register("R", RTranslator)
 
 
 def translate_parameters(kernel_name, language, parameters, comment="Parameters"):

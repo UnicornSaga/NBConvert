@@ -122,8 +122,6 @@ def execute_notebook(
             )
             write_py(cell_content, f"{output_path}/{version_uuid}/{cell_tag}.py")
 
-            # TODO: Handle duplicate function names when handling unimport files.
-
             current_root_dir = os.environ.get('ROOT_PROJECT_DIR', os.getcwd())
             if not current_root_dir:
                 logger.info("Missing env ROOT_PROJECT_DIR")
@@ -136,8 +134,10 @@ def execute_notebook(
                         file_content = f.read()
                         write_py(file_content, final_output_path)
 
+        raise_for_execution_errors(nb, output_path)
         logger.info(f"Generated Python artifacts with UUID directory {version_uuid}")
 
+        write_ipynb(nb, output_path)
         return version_uuid
 
 
@@ -152,6 +152,9 @@ def _prepare_code_buffer(code_buffer):
 
 
 def prepare_notebook_cell(nb, parameters):
+    if parameters == None:
+        return {}
+
     if len(parameters) == 0:
         parameters = set()
         for cell in nb.cells:
@@ -233,22 +236,39 @@ def raise_for_execution_errors(nb, output_path):
     """
     error = None
     for index, cell in enumerate(nb.cells):
-        if cell.get("outputs") is None:
-            continue
+        has_sys_exit = False
+        # check if there is any cell error output
+        if "outputs" in cell:
+            for output in cell.outputs:
+                if output.output_type == "error":
+                    if output.ename == "SystemExit" and (output.evalue == "" or output.evalue == "0"):
+                        has_sys_exit = True
+                        continue
+                    error = NBConvertExecutionError(
+                        cell_index=index,
+                        exec_count=cell.execution_count,
+                        source=cell.source,
+                        ename=output.ename,
+                        evalue=output.evalue,
+                        traceback=output.traceback,
+                    )
+                    break
 
-        for output in cell.outputs:
-            if output.output_type == "error":
-                if output.ename == "SystemExit" and (output.evalue == "" or output.evalue == "0"):
-                    continue
-                error = NBConvertExecutionError(
-                    cell_index=index,
-                    exec_count=cell.execution_count,
-                    source=cell.source,
-                    ename=output.ename,
-                    evalue=output.evalue,
-                    traceback=output.traceback,
-                )
-                break
+        # handle the CellExecutionError exceptions raised that didn't produce a cell error output
+        if (
+            error is None
+            and not has_sys_exit
+            and cell.get("metadata", {}).get("nbconvert", {}).get("exception") is True
+        ):
+            error = NBConvertExecutionError(
+                cell_index=index,
+                exec_count=cell.execution_count,
+                source=cell.source,
+                ename="CellExecutionError",
+                evalue="",
+                traceback=[],
+            )
+            break
 
     if error:
         # Write notebook back out with the Error Message at the top of the Notebook, and a link to
@@ -267,5 +287,4 @@ def raise_for_execution_errors(nb, output_path):
         nb.cells.insert(error.cell_index, error_anchor_cell)
         nb.cells.insert(0, error_msg_cell)
 
-        write_ipynb(nb, output_path)
         raise error

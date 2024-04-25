@@ -5,6 +5,7 @@ import os.path
 import boto3
 import moto
 import pytest
+import unittest
 from moto import mock_aws
 
 from nbconvert.s3 import S3, Bucket, Key, Prefix
@@ -40,111 +41,101 @@ def bucket_multiservice():
     return Bucket('my_sqs_bucket', ['ec2', 'sqs'])
 
 
-def test_bucket_init():
-    assert Bucket('my_test_bucket')
-    assert Bucket('my_sqs_bucket', 'sqs')
+class TestS3Connection(unittest.TestCase):
+    def test_bucket_init(self):
+        assert Bucket('my_test_bucket')
+        assert Bucket('my_sqs_bucket', 'sqs')
 
+    def test_bucket_defaults(self):
+        name = 'a bucket'
 
-def test_bucket_defaults():
-    name = 'a bucket'
+        b1 = Bucket(name)
+        b2 = Bucket(name, None)
 
-    b1 = Bucket(name)
-    b2 = Bucket(name, None)
+        assert b1.name == b2.name
+        assert b1.service == b2.service
 
-    assert b1.name == b2.name
-    assert b1.service == b2.service
+    def test_bucket_missing_params(self):
+        with pytest.raises(TypeError):
+            Bucket(service=None)
 
+        with pytest.raises(TypeError):
+            Bucket()
 
-def test_bucket_missing_params():
-    with pytest.raises(TypeError):
-        Bucket(service=None)
+    def test_bucket_list(self, bucket_sqs="s3"):
+        # prefix_test = ''
+        # assert bucket_sqs.list(prefix_test)
+        #
+        # prefix_test = 'abc'
+        # assert bucket_sqs.list(prefix_test) is None
+        #
+        # prefix_test = 'ec2'
+        # assert bucket_sqs.list(prefix_test) is None
+        #
+        # prefix_test = 'sqs'
+        # assert bucket_sqs.list(prefix_test)
+        pass
 
-    with pytest.raises(TypeError):
-        Bucket()
+    def test_prefix_init(self):
+        with pytest.raises(TypeError):
+            Prefix()
 
+        with pytest.raises(TypeError):
+            Prefix(service=None)
 
-def test_bucket_list(bucket_sqs):
-    # prefix_test = ''
-    # assert bucket_sqs.list(prefix_test)
-    #
-    # prefix_test = 'abc'
-    # assert bucket_sqs.list(prefix_test) is None
-    #
-    # prefix_test = 'ec2'
-    # assert bucket_sqs.list(prefix_test) is None
-    #
-    # prefix_test = 'sqs'
-    # assert bucket_sqs.list(prefix_test)
-    pass
+        with pytest.raises(TypeError):
+            Prefix('my_test_prefix')
 
+        b1 = Bucket('my_test_bucket')
+        p1 = Prefix(b1, 'sqs_test', service='sqs')
+        assert Prefix(b1, 'test_bucket')
+        assert Prefix(b1, 'test_bucket', service=None)
+        assert Prefix(b1, 'test_bucket', None)
+        assert p1.bucket.service == p1.service
 
-def test_prefix_init():
-    with pytest.raises(TypeError):
-        Prefix()
+    def test_prefix_defaults(self):
+        bucket = Bucket('my data pool')
+        name = 'bigdata bucket'
 
-    with pytest.raises(TypeError):
-        Prefix(service=None)
+        p1 = Prefix(bucket, name)
+        p2 = Prefix(bucket, name, None)
+        assert p1.name == p2.name
+        assert p1.service == p2.service
 
-    with pytest.raises(TypeError):
-        Prefix('my_test_prefix')
+    def test_prefix_str(self, bucket_sqs="s3"):
+        p1 = Prefix(bucket_sqs, 'sqs_prefix_test', 'sqs')
+        assert str(p1) == f"s3://{str(bucket_sqs)}/sqs_prefix_test"
 
-    b1 = Bucket('my_test_bucket')
-    p1 = Prefix(b1, 'sqs_test', service='sqs')
-    assert Prefix(b1, 'test_bucket')
-    assert Prefix(b1, 'test_bucket', service=None)
-    assert Prefix(b1, 'test_bucket', None)
-    assert p1.bucket.service == p1.service
+    def test_prefix_repr(self, bucket_sqs="s3"):
+        p1 = Prefix(bucket_sqs, 'sqs_prefix_test', 'sqs')
+        assert repr(p1) == f"s3://{str(bucket_sqs)}/sqs_prefix_test"
 
+    def test_key_init(self):
+        pass
 
-def test_prefix_defaults():
-    bucket = Bucket('my data pool')
-    name = 'bigdata bucket'
+    def test_key_repr(self):
+        k = Key("foo", "bar")
+        assert repr(k) == "s3://foo/bar"
 
-    p1 = Prefix(bucket, name)
-    p2 = Prefix(bucket, name, None)
-    assert p1.name == p2.name
-    assert p1.service == p2.service
+    def test_key_defaults(self):
+        bucket = Bucket('my data pool')
+        name = 'bigdata bucket'
 
+        k1 = Key(bucket, name)
+        k2 = Key(bucket, name, None, None, None, None, None)
+        assert k1.size == k2.size
+        assert k1.etag == k2.etag
+        assert k1.storage_class == k2.storage_class
+        assert k1.service == k2.service
+        assert k1.is_prefix is False
 
-def test_prefix_str(bucket_sqs):
-    p1 = Prefix(bucket_sqs, 'sqs_prefix_test', 'sqs')
-    assert str(p1) == f"s3://{str(bucket_sqs)}/sqs_prefix_test"
-
-
-def test_prefix_repr(bucket_sqs):
-    p1 = Prefix(bucket_sqs, 'sqs_prefix_test', 'sqs')
-    assert repr(p1) == f"s3://{str(bucket_sqs)}/sqs_prefix_test"
-
-
-def test_key_init():
-    pass
-
-
-def test_key_repr():
-    k = Key("foo", "bar")
-    assert repr(k) == "s3://foo/bar"
-
-
-def test_key_defaults():
-    bucket = Bucket('my data pool')
-    name = 'bigdata bucket'
-
-    k1 = Key(bucket, name)
-    k2 = Key(bucket, name, None, None, None, None, None)
-    assert k1.size == k2.size
-    assert k1.etag == k2.etag
-    assert k1.storage_class == k2.storage_class
-    assert k1.service == k2.service
-    assert k1.is_prefix is False
-
-
-@mock_aws
-def test_s3_defaults():
-    s1 = S3()
-    s2 = S3()
-    assert s1.session == s2.session
-    assert s1.client == s2.client
-    assert s1.s3 == s2.s3
+    @mock_aws
+    def test_s3_defaults(self):
+        s1 = S3()
+        s2 = S3()
+        assert s1.session == s2.session
+        assert s1.client == s2.client
+        assert s1.s3 == s2.s3
 
 
 local_dir = os.path.dirname(os.path.abspath(__file__))

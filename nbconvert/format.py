@@ -2,8 +2,6 @@ import ast
 import os
 from collections import deque
 
-from nbconvert.utils import find_file
-
 
 class StaticAnalyzer(ast.NodeVisitor):
     def __init__(self):
