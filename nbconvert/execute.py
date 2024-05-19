@@ -126,6 +126,7 @@ def execute_notebook(
             if not current_root_dir:
                 logger.info("Missing env ROOT_PROJECT_DIR")
             missing_import_files = find_files_containing_imports(cell_content, current_root_dir)
+            logger.info(f"Missing imports path: {missing_import_files}")
             for file_path in missing_import_files:
                 file_name = str(file_path).split('/')[-1]
                 final_output_path = f"{output_path}/{version_uuid}/{file_name}"
@@ -137,8 +138,7 @@ def execute_notebook(
         raise_for_execution_errors(nb, output_path)
         logger.info(f"Generated Python artifacts with UUID directory {version_uuid}")
 
-        write_ipynb(nb, output_path)
-        return version_uuid
+        return f"{output_path}/{version_uuid}"
 
 
 def _prepare_code_buffer(code_buffer):

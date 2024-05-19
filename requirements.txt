@@ -11,3 +11,4 @@ autoimport==1.4.0
 isort==5.13.2
 black==24.1.1
 ansicolors
+boto3

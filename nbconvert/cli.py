@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import platform
 import sys
@@ -181,7 +182,7 @@ def nbconvert(
         sys.exit(display_notebook_help(click_ctx, notebook_path, parameters_final))
 
     try:
-        execute_notebook(
+        generated_file = execute_notebook(
             input_path=input_path,
             output_path=output_path,
             parameters_specified=parameter_specified,
@@ -192,6 +193,12 @@ def nbconvert(
             report_mode=report_mode,
             cwd=cwd,
         )
+        save_path = os.path.join(os.getcwd(), 'run_info.json')
+        with open(save_path, 'w') as outfile:
+            json.dump({
+                "run_id": generated_file,
+            }, outfile)
+        logger.info(f"Run Info saved to file: {save_path}")
     except nbclient.exceptions.DeadKernelError:
         # Exiting with a special exit code for dead kernels
         traceback.print_exc()

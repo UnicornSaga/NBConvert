@@ -226,9 +226,11 @@ def find_files_containing_imports(code, project_directory):
                     for func in missing_import[sub_module]:
                         if import_module in curr_file and func in file_content:
                             matching_files.add(curr_file)
+                            return
                 else:
                     if missing_import in curr_file:
                         matching_files.add(curr_file)
+                        return
 
                 next_curr_dir = os.path.dirname(curr_file)
                 search_files(file_content, next_curr_dir)
